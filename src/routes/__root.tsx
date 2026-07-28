@@ -90,6 +90,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "NOXX Time Tracker" },
+      { name: "twitter:description", content: "Moderne Arbeitszeiterfassung mit Stoppuhr, Kalender und CSV-Export." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/d94eb8b2-7967-4bdd-998b-b1e83fd328ea" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/d94eb8b2-7967-4bdd-998b-b1e83fd328ea" },
     ],
     links: [
       {
