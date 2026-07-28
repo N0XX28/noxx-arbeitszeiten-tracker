@@ -177,7 +177,7 @@ function TrackerPage() {
           toast.success("Eintrag gelöscht");
         }}
       />
-      <Toaster position="bottom-center" />
+      <Toaster position="bottom-center" theme="dark" />
     </main>
   );
 }
