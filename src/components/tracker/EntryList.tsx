@@ -1,5 +1,6 @@
 import { Pencil, Trash2 } from "lucide-react";
-import { formatDateLong, formatDuration, type TimeEntry } from "@/lib/time";
+import { entrySegments, formatDateLong, formatDuration, type TimeEntry } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 interface EntryListProps {
   entries: TimeEntry[];
@@ -24,10 +25,12 @@ export function EntryList({ entries, onEdit, onDelete, emptyHint }: EntryListPro
 
   return (
     <ul className="flex list-none flex-col gap-[5px] p-0">
-      {entries.map((entry) => (
+      {entries.map((entry) => {
+        const segments = entry.breaks?.length ? entrySegments(entry) : [];
+        return (
         <li
           key={entry.id}
-          className="flex items-center gap-3 rounded-[9px] border border-border bg-surface-raised px-[13px] py-[11px] transition-colors hover:border-border-strong hover:bg-surface"
+          className="flex flex-wrap items-center gap-3 rounded-[9px] border border-border bg-surface-raised px-[13px] py-[11px] transition-colors hover:border-border-strong hover:bg-surface"
         >
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="truncate text-[13.5px] font-medium text-card-foreground">
@@ -49,8 +52,26 @@ export function EntryList({ entries, onEdit, onDelete, emptyHint }: EntryListPro
               <Trash2 className="size-[15px]" />
             </IconButton>
           </div>
+          {segments.length > 0 ? (
+            <ul className="flex w-full list-none flex-wrap gap-1 p-0">
+              {segments.map((seg, i) => (
+                <li
+                  key={`${seg.entryId}-${i}`}
+                  className={cn(
+                    "tnum rounded-full border px-2 py-0.5 text-[11px]",
+                    seg.type === "work"
+                      ? "border-brand/40 bg-brand/15 text-card-foreground"
+                      : "border-dashed border-border-strong text-muted-foreground",
+                  )}
+                >
+                  {seg.type === "work" ? "Arbeit" : "Pause"} {seg.start}–{seg.end}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
 }
