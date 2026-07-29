@@ -8,8 +8,10 @@ export interface TimeEntry {
   start: string;
   /** HH:mm */
   end: string;
-  /** break in minutes */
+  /** break in minutes (total) */
   breakMinutes: number;
+  /** documented break segments, ordered by clock time */
+  breaks?: BreakSegment[];
   description: string;
   /** net worked minutes (end - start - break), may span midnight */
   durationMinutes: number;
@@ -172,4 +174,103 @@ export function createId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/* ---------------------------------------------------------------------------
+ * Pausen-Segmente
+ * ------------------------------------------------------------------------- */
+
+/** A documented break inside a time entry ("HH:mm" clock times). */
+export interface BreakSegment {
+  start: string;
+  end: string;
+}
+
+export type DaySegmentType = "work" | "break";
+
+export interface DaySegment {
+  type: DaySegmentType;
+  start: string;
+  end: string;
+  minutes: number;
+  entryId: string;
+  description: string;
+}
+
+export function addMinutesToTime(time: string, delta: number): string {
+  const base = parseTime(time) ?? 0;
+  const total = ((base + delta) % 1440 + 1440) % 1440;
+  return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+}
+
+export function breaksMinutes(breaks: BreakSegment[] | undefined): number {
+  if (!breaks?.length) return 0;
+  return breaks.reduce((acc, b) => acc + (grossMinutes(b.start, b.end) ?? 0), 0);
+}
+
+/**
+ * Ordered work/break segments of one entry, based on the documented breaks.
+ * Falls back to a single work block when no breaks were recorded.
+ */
+export function entrySegments(entry: TimeEntry): DaySegment[] {
+  const total = grossMinutes(entry.start, entry.end);
+  if (total === null) return [];
+  const startMin = parseTime(entry.start) ?? 0;
+
+  const rel = (time: string) => {
+    const p = parseTime(time);
+    return p === null ? null : (p - startMin + 1440) % 1440;
+  };
+
+  const raw = (entry.breaks ?? [])
+    .map((b) => {
+      const s = rel(b.start);
+      const len = grossMinutes(b.start, b.end);
+      if (s === null || len === null) return null;
+      return { s: Math.min(s, total), e: Math.min(s + len, total) };
+    })
+    .filter((b): b is { s: number; e: number } => Boolean(b) && b!.e > b!.s)
+    .sort((a, b) => a.s - b.s);
+
+  // merge overlapping breaks
+  const merged: { s: number; e: number }[] = [];
+  for (const b of raw) {
+    const last = merged[merged.length - 1];
+    if (last && b.s <= last.e) last.e = Math.max(last.e, b.e);
+    else merged.push({ ...b });
+  }
+
+  const segments: DaySegment[] = [];
+  const push = (type: DaySegmentType, from: number, to: number) => {
+    if (to <= from) return;
+    segments.push({
+      type,
+      start: addMinutesToTime(entry.start, from),
+      end: addMinutesToTime(entry.start, to),
+      minutes: to - from,
+      entryId: entry.id,
+      description: entry.description,
+    });
+  };
+
+  let cursor = 0;
+  for (const b of merged) {
+    push("work", cursor, b.s);
+    push("break", b.s, b.e);
+    cursor = b.e;
+  }
+  push("work", cursor, total);
+  return segments;
+}
+
+/** All segments of a day, ordered by clock time. */
+export function daySegments(entries: TimeEntry[], iso: string): DaySegment[] {
+  return entries
+    .filter((e) => e.date === iso)
+    .flatMap(entrySegments)
+    .sort((a, b) => (parseTime(a.start) ?? 0) - (parseTime(b.start) ?? 0));
+}
+
+export function sumBreakMinutes(entries: TimeEntry[]): number {
+  return entries.reduce((acc, e) => acc + (e.breakMinutes || 0), 0);
 }
