@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { formatStopwatch, type TimeEntry } from "@/lib/time";
+import { formatDuration, formatStopwatch, type TimeEntry } from "@/lib/time";
 import type { StopwatchStatus } from "@/hooks/useStopwatch";
 
 interface StopwatchPanelProps {
@@ -13,6 +13,8 @@ interface StopwatchPanelProps {
   onResume: () => void;
   onStop: () => void;
   onDiscard: () => void;
+  breakMs: number;
+  breakCount: number;
   lastSaved?: TimeEntry | null;
 }
 
@@ -32,6 +34,8 @@ export function StopwatchPanel({
   onResume,
   onStop,
   onDiscard,
+  breakMs,
+  breakCount,
 }: StopwatchPanelProps) {
   const { hh, mm, ss } = formatStopwatch(elapsedMs);
   const meta = STATUS_META[status];
@@ -82,6 +86,21 @@ export function StopwatchPanel({
             <span className="max-w-full truncate text-[13.5px] text-muted-foreground">
               {description.trim() || "Ohne Beschreibung"}
             </span>
+            <div className="tnum flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-[12.5px]">
+              <span
+                className={cn(
+                  "rounded-full border px-2.5 py-1",
+                  status === "paused"
+                    ? "border-destructive/50 text-destructive"
+                    : "border-border-strong text-muted-foreground",
+                )}
+              >
+                Pause gesamt: {formatDuration(Math.round(breakMs / 60000))}
+              </span>
+              <span className="text-muted-foreground">
+                {breakCount === 1 ? "1 Pause" : `${breakCount} Pausen`}
+              </span>
+            </div>
             <div className="flex flex-wrap justify-center gap-[9px]">
               {status === "running" ? (
                 <button
@@ -89,7 +108,7 @@ export function StopwatchPanel({
                   onClick={onPause}
                   className="rounded-[10px] border border-border-strong px-5 py-[11px] text-sm font-medium text-foreground transition-colors hover:bg-accent"
                 >
-                  Pause
+                  Pause starten
                 </button>
               ) : (
                 <button
@@ -97,7 +116,7 @@ export function StopwatchPanel({
                   onClick={onResume}
                   className="rounded-[10px] border border-border-strong px-5 py-[11px] text-sm font-medium text-foreground transition-colors hover:bg-accent"
                 >
-                  Fortsetzen
+                  Pause beenden
                 </button>
               )}
               <button

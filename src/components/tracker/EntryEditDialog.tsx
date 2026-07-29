@@ -39,6 +39,7 @@ export function EntryEditDialog({
       end: entry.end,
       breakMinutes: String(entry.breakMinutes),
       description: entry.description,
+      breaks: entry.breaks ?? [],
     });
     setTouched(false);
   }, [entry]);

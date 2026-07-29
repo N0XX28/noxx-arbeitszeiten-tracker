@@ -1,6 +1,14 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { computeDuration, formatDuration, toISODate } from "@/lib/time";
+import {
+  breaksMinutes,
+  computeDuration,
+  formatDuration,
+  grossMinutes,
+  toISODate,
+  type BreakSegment,
+} from "@/lib/time";
 import type { EntryDraft } from "@/hooks/useTimeEntries";
 
 export interface ManualFormValues {
@@ -9,6 +17,8 @@ export interface ManualFormValues {
   end: string;
   breakMinutes: string;
   description: string;
+  /** documented breaks; when set they define the total break time */
+  breaks: BreakSegment[];
 }
 
 export const emptyManualValues = (): ManualFormValues => ({
@@ -17,7 +27,13 @@ export const emptyManualValues = (): ManualFormValues => ({
   end: "17:00",
   breakMinutes: "30",
   description: "",
+  breaks: [],
 });
+
+function effectiveBreakMinutes(values: ManualFormValues): number {
+  if (values.breaks.length > 0) return breaksMinutes(values.breaks);
+  return Math.max(0, Number(values.breakMinutes === "" ? 0 : values.breakMinutes) || 0);
+}
 
 export function validateManual(values: ManualFormValues): {
   errors: Partial<Record<keyof ManualFormValues, string>>;
@@ -29,21 +45,33 @@ export function validateManual(values: ManualFormValues): {
   if (!values.start) errors.start = "Bitte eine Startzeit eintragen.";
   if (!values.end) errors.end = "Bitte eine Endzeit eintragen.";
 
-  const breakMinutes = Number(values.breakMinutes === "" ? 0 : values.breakMinutes);
-  if (!Number.isFinite(breakMinutes) || breakMinutes < 0) {
+  const rawBreak = Number(values.breakMinutes === "" ? 0 : values.breakMinutes);
+  if (values.breaks.length === 0 && (!Number.isFinite(rawBreak) || rawBreak < 0)) {
     errors.breakMinutes = "Die Pause muss 0 oder größer sein.";
   }
 
+  if (values.breaks.length > 0) {
+    const invalid = values.breaks.some((b) => {
+      const len = grossMinutes(b.start, b.end);
+      return !b.start || !b.end || len === null || len <= 0;
+    });
+    if (invalid) errors.breaks = "Jede Pause braucht eine gültige Start- und Endzeit.";
+  }
+
+  const breakMinutes = effectiveBreakMinutes(values);
+
   let duration: number | null = null;
   if (values.start && values.end) {
-    duration = computeDuration(values.start, values.end, Math.max(0, breakMinutes || 0));
+    duration = computeDuration(values.start, values.end, breakMinutes);
     if (duration === null) {
       errors.end = "Ungültige Zeitangabe.";
     } else if (values.start === values.end) {
       errors.end = "Start- und Endzeit dürfen nicht identisch sein.";
       duration = null;
     } else if (duration < 0) {
-      errors.breakMinutes = "Die Pause ist länger als der erfasste Zeitraum.";
+      const msg = "Die Pausen sind länger als der erfasste Zeitraum.";
+      if (values.breaks.length > 0) errors.breaks = msg;
+      else errors.breakMinutes = msg;
       duration = null;
     } else if (duration === 0) {
       errors.breakMinutes = "Die Arbeitszeit beträgt 0 Minuten.";
@@ -63,7 +91,8 @@ export function toDraft(values: ManualFormValues): EntryDraft {
     date: values.date,
     start: values.start,
     end: values.end,
-    breakMinutes: Math.max(0, Number(values.breakMinutes || 0)),
+    breakMinutes: effectiveBreakMinutes(values),
+    breaks: values.breaks.length > 0 ? values.breaks : undefined,
     description: values.description.trim(),
   };
 }
@@ -80,6 +109,24 @@ export function ManualEntryFields({
   errors: Partial<Record<keyof ManualFormValues, string>>;
   onChange: (patch: Partial<ManualFormValues>) => void;
 }) {
+  const hasSegments = values.breaks.length > 0;
+
+  const addBreak = () => {
+    const last = values.breaks[values.breaks.length - 1];
+    const suggestion: BreakSegment = last
+      ? { start: last.end, end: last.end }
+      : { start: "12:00", end: "12:30" };
+    onChange({ breaks: [...values.breaks, suggestion] });
+  };
+
+  const patchBreak = (index: number, patch: Partial<BreakSegment>) =>
+    onChange({
+      breaks: values.breaks.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+    });
+
+  const removeBreak = (index: number) =>
+    onChange({ breaks: values.breaks.filter((_, i) => i !== index) });
+
   return (
     <div className="flex flex-col gap-[13px]">
       <label className="flex flex-col gap-1.5">
@@ -133,12 +180,68 @@ export function ManualEntryFields({
             type="number"
             min={0}
             step={5}
-            value={values.breakMinutes}
+            disabled={hasSegments}
+            value={hasSegments ? String(breaksMinutes(values.breaks)) : values.breakMinutes}
             onChange={(e) => onChange({ breakMinutes: e.target.value })}
-            className={cn(fieldClass, errors.breakMinutes && "border-destructive")}
+            className={cn(
+              fieldClass,
+              errors.breakMinutes && "border-destructive",
+              hasSegments && "opacity-60",
+            )}
           />
           {errors.breakMinutes ? <FieldError>{errors.breakMinutes}</FieldError> : null}
         </label>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-[10px] border border-border bg-surface-raised p-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="label-caps">Pausen dokumentieren</span>
+          <button
+            type="button"
+            onClick={addBreak}
+            className="inline-flex items-center gap-1 rounded-md border border-border-strong px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Plus className="size-3.5" />
+            Pause
+          </button>
+        </div>
+
+        {hasSegments ? (
+          <ul className="flex list-none flex-col gap-1.5 p-0">
+            {values.breaks.map((b, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <input
+                  type="time"
+                  aria-label={`Pause ${i + 1} Start`}
+                  value={b.start}
+                  onChange={(e) => patchBreak(i, { start: e.target.value })}
+                  className={cn(fieldClass, "flex-1 py-2")}
+                />
+                <span className="text-muted-foreground">–</span>
+                <input
+                  type="time"
+                  aria-label={`Pause ${i + 1} Ende`}
+                  value={b.end}
+                  onChange={(e) => patchBreak(i, { end: e.target.value })}
+                  className={cn(fieldClass, "flex-1 py-2")}
+                />
+                <button
+                  type="button"
+                  aria-label={`Pause ${i + 1} entfernen`}
+                  onClick={() => removeBreak(i)}
+                  className="grid size-7 flex-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[12px] text-muted-foreground">
+            Ohne Zeitangabe wird nur die Pausendauer in Minuten gespeichert.
+          </p>
+        )}
+        {errors.breaks ? <FieldError>{errors.breaks}</FieldError> : null}
       </div>
     </div>
   );
