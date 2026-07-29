@@ -15,6 +15,13 @@ export interface StopwatchState {
   accumulatedMs: number;
   description: string;
   active: boolean;
+  /** documented breaks; the last one may still be open (endedAt === null) */
+  breaks: StopwatchBreak[];
+}
+
+export interface StopwatchBreak {
+  startedAt: number;
+  endedAt: number | null;
 }
 
 export const emptyStopwatch: StopwatchState = {
@@ -22,6 +29,7 @@ export const emptyStopwatch: StopwatchState = {
   accumulatedMs: 0,
   description: "",
   active: false,
+  breaks: [],
 };
 
 function safeParse<T>(raw: string | null, fallback: T): T {
@@ -57,7 +65,11 @@ export const stopwatchStore = {
       emptyStopwatch,
     );
     if (typeof parsed?.accumulatedMs !== "number") return emptyStopwatch;
-    return { ...emptyStopwatch, ...parsed };
+    return {
+      ...emptyStopwatch,
+      ...parsed,
+      breaks: Array.isArray(parsed.breaks) ? parsed.breaks : [],
+    };
   },
   save(state: StopwatchState): void {
     if (!isBrowser()) return;
