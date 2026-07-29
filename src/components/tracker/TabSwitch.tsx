@@ -1,10 +1,11 @@
 import { cn } from "@/lib/utils";
 
-export type TrackerTab = "stopwatch" | "manual" | "calendar";
+export type TrackerTab = "stopwatch" | "manual" | "week" | "calendar";
 
 const TABS: { id: TrackerTab; label: string }[] = [
   { id: "stopwatch", label: "Stoppuhr" },
   { id: "manual", label: "Manuell" },
+  { id: "week", label: "Woche" },
   { id: "calendar", label: "Kalender" },
 ];
 
@@ -19,7 +20,7 @@ export function TabSwitch({
     <div
       role="tablist"
       aria-label="Erfassungsart"
-      className="flex gap-1.5 self-start rounded-[10px] border border-border bg-surface-raised p-1"
+      className="flex flex-wrap gap-1.5 self-start rounded-[10px] border border-border bg-surface-raised p-1"
     >
       {TABS.map((tab) => {
         const active = tab.id === value;

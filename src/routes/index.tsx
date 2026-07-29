@@ -8,6 +8,7 @@ import { TabSwitch, type TrackerTab } from "@/components/tracker/TabSwitch";
 import { StopwatchPanel } from "@/components/tracker/StopwatchPanel";
 import { ManualForm } from "@/components/tracker/ManualForm";
 import { CalendarPanel } from "@/components/tracker/CalendarPanel";
+import { WeekView } from "@/components/tracker/WeekView";
 import { EntryList } from "@/components/tracker/EntryList";
 import { EntryEditDialog } from "@/components/tracker/EntryEditDialog";
 import { DeleteEntryDialog } from "@/components/tracker/DeleteEntryDialog";
@@ -50,7 +51,7 @@ function TrackerPage() {
 
   const listEntries = useMemo(
     () =>
-      tab === "calendar" && selectedDate
+      (tab === "calendar" || tab === "week") && selectedDate
         ? entries.filter((e) => e.date === selectedDate)
         : entries,
     [entries, tab, selectedDate],
@@ -58,7 +59,7 @@ function TrackerPage() {
 
   const handleStop = () => {
     const session = stopwatch.finish();
-    const minutes = Math.round(session.totalMs / 60000);
+    const minutes = Math.round(session.workMs / 60000);
     if (minutes < 1) {
       toast.error("Zu kurz zum Speichern", {
         description: "Erfasste Zeiten müssen mindestens eine Minute betragen.",
@@ -69,7 +70,8 @@ function TrackerPage() {
       date: toISODate(session.start),
       start: toTimeInput(session.start),
       end: toTimeInput(session.end),
-      breakMinutes: 0,
+      breakMinutes: Math.round(session.breakMs / 60000),
+      breaks: session.breaks.length > 0 ? session.breaks : undefined,
       description: session.description.trim(),
     });
     toast.success("Zeit gespeichert", { description: formatDuration(minutes) });
@@ -124,10 +126,20 @@ function TrackerPage() {
             onResume={stopwatch.resume}
             onStop={handleStop}
             onDiscard={stopwatch.reset}
+            breakMs={stopwatch.breakMs}
+            breakCount={stopwatch.breakCount}
           />
         ) : null}
 
         {tab === "manual" ? <ManualForm onSubmit={addEntry} /> : null}
+
+        {tab === "week" ? (
+          <WeekView
+            entries={entries}
+            selectedDate={selectedDate}
+            onSelectDate={setSelectedDate}
+          />
+        ) : null}
 
         {tab === "calendar" ? (
           <CalendarPanel
@@ -140,7 +152,7 @@ function TrackerPage() {
         <section className="mt-1.5 flex flex-col gap-[9px]">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-card-foreground">
-              {tab === "calendar" && selectedDate
+              {(tab === "calendar" || tab === "week") && selectedDate
                 ? formatDateLong(selectedDate)
                 : "Einträge"}
             </h2>
@@ -153,7 +165,7 @@ function TrackerPage() {
             onEdit={setEditing}
             onDelete={setDeleting}
             emptyHint={
-              tab === "calendar" && selectedDate
+              (tab === "calendar" || tab === "week") && selectedDate
                 ? "Für diesen Tag sind keine Zeiten erfasst."
                 : undefined
             }
